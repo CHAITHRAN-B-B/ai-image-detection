@@ -241,10 +241,10 @@ def get_magnifier_html(src_b64, res_b64=None):
             }
             .zoom-result {
                 position: absolute;
-                top: 0;
+                top: calc(100% + 15px);
                 left: 0;
-                width: 100%;
-                height: 100%;
+                width: 310px;
+                height: 310px;
                 background-color: #0a0f1e;
                 border: 2px solid rgba(56, 189, 248, 0.6);
                 border-radius: 12px;
@@ -272,7 +272,14 @@ def get_magnifier_html(src_b64, res_b64=None):
         </style>
     </head>
     <body>
-        
+        <div class="column">
+            <div class="card-label">◈ &nbsp;Source Specimen Input</div>
+            <div class="card" id="src-card">
+                <img src="data:image/jpeg;base64,__SRC_B64__" id="src-img" />
+                <div class="lens-overlay" id="src-lens"></div>
+                <div class="zoom-result" id="src-zoom"></div>
+            </div>
+        </div>
         __RES_COLUMN__
         
         <script>
@@ -280,6 +287,12 @@ def get_magnifier_html(src_b64, res_b64=None):
 
             function getElements() {
                 return {
+                    src: {
+                        card: document.getElementById("src-card"),
+                        img: document.getElementById("src-img"),
+                        lens: document.getElementById("src-lens"),
+                        zoom: document.getElementById("src-zoom")
+                    },
                     res: {
                         card: document.getElementById("res-card"),
                         img: document.getElementById("res-img"),
@@ -290,8 +303,8 @@ def get_magnifier_html(src_b64, res_b64=None):
             }
 
             function setDisplay(els, displayMode) {
-                if (els.res.card && els.res.lens) els.res.lens.style.display = displayMode;
-                if (els.res.card && els.res.zoom) els.res.zoom.style.display = displayMode;
+                if (els.src.card && els.src.lens) els.src.lens.style.display = displayMode;
+                if (els.src.card && els.src.zoom) els.src.zoom.style.display = displayMode;
             }
 
             function updateMagnifier(targetEls, relX, relY, bgImgSrc) {
@@ -335,9 +348,11 @@ def get_magnifier_html(src_b64, res_b64=None):
 
             function handleMouseMove(e) {
                 const els = getElements();
-                if (!els.res.card) return;
+                if (!els.res.card || !els.src.card) return;
 
                 const card = e.target.closest(".card");
+                
+                // ONLY trigger if hovering the RIGHT image (res-card)
                 if (card && card === els.res.card) {
                     
                     setDisplay(els, "block");
@@ -352,8 +367,9 @@ def get_magnifier_html(src_b64, res_b64=None):
                     const relX = Math.min(Math.max(x / imgRect.width, 0), 1);
                     const relY = Math.min(Math.max(y / imgRect.height, 0), 1);
 
-                    const bgSrc = els.res.img.src;
-                    updateMagnifier(els.res, relX, relY, bgSrc);
+                    // Update LEFT image (src) magnifier based on hover coordinates
+                    const bgSrc = els.src.img.src;
+                    updateMagnifier(els.src, relX, relY, bgSrc);
                 }
             }
 
@@ -600,11 +616,9 @@ st.divider()
 # UPLOAD SECTION
 # ─────────────────────────────────────────────
 with st.columns([1, 2, 1])[1]:
-    if "paste_component" not in st.session_state:
+    if "paste_component_dir" not in st.session_state:
         st.session_state["paste_component_dir"] = create_upload_paste_component()
-        st.session_state["paste_component"] = components.declare_component("paste_component", path=st.session_state["paste_component_dir"])
-    paste_component = st.session_state["paste_component"]
-    
+    paste_component = components.declare_component("paste_component", path=st.session_state["paste_component_dir"])
     pasted_image_data = paste_component(key="paste_clipboard_action")
 
 # ─────────────────────────────────────────────
@@ -805,15 +819,9 @@ if "temp_path" in st.session_state:
             res_b64 = get_image_base64(result_image)
             
         html_str = get_magnifier_html(src_b64, res_b64)
-        if hasattr(st, "iframe"):
-            html_path = os.path.join(tempfile.gettempdir(), "magnifier_app.html")
-            with open(html_path, "w", encoding="utf-8") as f:
-                f.write(html_str)
-            st.iframe(html_path, height=350)
-        elif hasattr(st, "html"):
-            st.html(html_str)
-        else:
-            components.html(html_str, height=350, scrolling=False)
+        
+        # FIX: Must use components.html to ensure iframe sandboxing so Streamlit doesn't strip the javascript!
+        components.html(html_str, height=350, scrolling=False)
 
 
         # ── VERTICAL ANOMALY TIMELINE STRIPS ──
